@@ -330,9 +330,11 @@ body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0f172a; 
               <option value="0">Ex 1</option><option value="1">Ex 2</option><option value="2">Ex 3</option>
             </select>
           </div>
-          <div class="flex gap-3">
-            <button onclick="addExerciseToSession()" class="flex-1 py-3 bg-amber-500/20 border border-amber-500/40 text-amber-400 rounded-xl font-black text-xs uppercase italic hover:bg-amber-500/30 transition-all">+ Ajouter un exercice</button>
-            <button onclick="deleteExerciseFromSession()" class="flex-1 py-3 bg-red-950/30 border border-red-900/40 text-red-400 rounded-xl font-black text-xs uppercase italic hover:bg-red-950/50 transition-all">🗑 Supprimer cet exercice</button>
+          <div class="flex gap-2 flex-wrap">
+            <button onclick="addExerciseToSession()" class="flex-1 py-3 bg-amber-500/20 border border-amber-500/40 text-amber-400 rounded-xl font-black text-xs uppercase italic hover:bg-amber-500/30 transition-all">+ Ajouter</button>
+            <button onclick="duplicateExercise()" class="flex-1 py-3 bg-blue-500/20 border border-blue-500/40 text-blue-400 rounded-xl font-black text-xs uppercase italic hover:bg-blue-500/30 transition-all">⧉ Dupliquer Ex.</button>
+            <button onclick="duplicateCycle()" class="flex-1 py-3 bg-purple-500/20 border border-purple-500/40 text-purple-400 rounded-xl font-black text-xs uppercase italic hover:bg-purple-500/30 transition-all">⧉ Dupliquer Cycle</button>
+            <button onclick="deleteExerciseFromSession()" class="flex-1 py-3 bg-red-950/30 border border-red-900/40 text-red-400 rounded-xl font-black text-xs uppercase italic hover:bg-red-950/50 transition-all">🗑 Supprimer Ex.</button>
           </div>
           <div class="space-y-4">
             <div class="bg-slate-900/50 p-5 rounded-[1.5rem] border border-slate-800 space-y-3">
@@ -744,9 +746,14 @@ function renderCycleStatusList() {
       (isUnlocked ? '<span class="text-[8px] font-black px-2 py-0.5 bg-amber-500/20 text-amber-500 rounded-md uppercase italic">Actif</span>' : '<span class="text-[8px] font-black px-2 py-0.5 bg-slate-800 text-slate-600 rounded-md uppercase italic">Verrouillé</span>') +
       (isArchived ? '<span class="text-[8px] font-black px-2 py-0.5 bg-slate-700/40 text-slate-500 rounded-md uppercase italic">Archive</span>' : '') +
       '</div></div>' +
-      '<button onclick="toggleCycleArchive(' + c.id + ')" class="flex-shrink-0 ml-4 px-4 py-2 rounded-xl font-black text-[9px] uppercase italic transition-all ' +
+      '<div class="flex items-center gap-2 flex-shrink-0 ml-4">' +
+      '<input id="rename-input-' + c.id + '" type="text" value="' + c.focus + '" class="w-32 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-bold outline-none focus:border-amber-500">' +
+      '<button onclick="renameCycle(' + c.id + ')" class="px-3 py-2 rounded-xl font-black text-[9px] uppercase italic bg-slate-800 text-amber-500 hover:bg-amber-500/20 border border-slate-700 transition-all">✓</button>' +
+      '<button onclick="toggleCycleArchive(' + c.id + ')" class="px-3 py-2 rounded-xl font-black text-[9px] uppercase italic transition-all ' +
       (isArchived ? 'bg-slate-800 text-amber-600 hover:bg-amber-500/20 hover:text-amber-400 border border-slate-700' : 'bg-slate-900 text-slate-500 hover:bg-slate-800 hover:text-slate-300 border border-slate-800') + '">' +
-      (isArchived ? '↑ Désarchiver' : '↓ Archiver') + '</button></div>';
+      (isArchived ? '↑ Désarchiver' : '↓ Archiver') + '</button>' +
+      '<button id="confirm-delete-cycle-' + c.id + '" data-confirmed="0" onclick="deleteCyclePermanently(' + c.id + ')" class="px-3 py-2 rounded-xl font-black text-[9px] uppercase italic bg-red-950/30 text-red-700 hover:text-red-400 hover:bg-red-950/50 border border-red-900/30 transition-all">Supprimer</button>' +
+      '</div></div>';
   }).join('');
 }
 async function toggleCycleArchive(id) {
@@ -926,6 +933,87 @@ async function saveCurrentExercise() {
   }
 }
 
+async function duplicateExercise() {
+  if (!window.userId) return;
+  const cId      = parseInt(document.getElementById('edit-cycle').value);
+  const sessType = document.getElementById('edit-session').value;
+  const exIdx    = parseInt(document.getElementById('edit-exercise-idx').value);
+  const cIdx     = window.dbProgram.findIndex(c => c.id === cId);
+  if (cIdx === -1) return;
+  const sess  = window.dbProgram[cIdx].sessions[sessType];
+  const exArr = Array.isArray(sess) ? sess : (sess.exercises || []);
+  const copy  = Object.assign({}, exArr[exIdx], { name: exArr[exIdx].name + ' (copie)' });
+  exArr.splice(exIdx + 1, 0, copy);
+  if (!Array.isArray(sess)) window.dbProgram[cIdx].sessions[sessType].exercises = exArr;
+  try {
+    await updateDB();
+    rebuildExerciseSelect(exArr.length, exIdx + 1);
+    syncEditorState();
+    toast('Exercice duplique !', 'success');
+  } catch(e) { toast('Erreur duplication', 'error'); }
+}
+
+async function duplicateCycle() {
+  if (!window.userId) return;
+  const cId  = parseInt(document.getElementById('edit-cycle').value);
+  const cIdx = window.dbProgram.findIndex(c => c.id === cId);
+  if (cIdx === -1) return;
+  const src   = window.dbProgram[cIdx];
+  const newId = Math.max(...window.dbProgram.map(c => c.id)) + 1;
+  const clone = JSON.parse(JSON.stringify(src));
+  clone.id    = newId;
+  clone.focus = src.focus + ' (copie)';
+  window.dbProgram.push(clone);
+  try {
+    await updateDB();
+    rebuildCycleLists();
+    renderMenu();
+    renderCycleStatusList();
+    toast('Cycle ' + newId + ' cree par duplication !', 'success', 4000);
+  } catch(e) { toast('Erreur duplication cycle', 'error'); }
+}
+
+async function deleteCyclePermanently(id) {
+  if (!window.userId) return;
+  const el = document.getElementById('confirm-delete-cycle-' + id);
+  if (!el || el.dataset.confirmed !== '1') {
+    if (el) { el.dataset.confirmed = '1'; el.innerText = 'CONFIRMER ?'; el.classList.add('text-red-400'); }
+    setTimeout(() => { if (el) { el.dataset.confirmed = '0'; el.innerText = 'Supprimer'; el.classList.remove('text-red-400'); } }, 3000);
+    return;
+  }
+  const cIdx = window.dbProgram.findIndex(c => c.id === id);
+  if (cIdx === -1) return;
+  window.dbProgram.splice(cIdx, 1);
+  window.unlockedCycles.delete(id);
+  window.archivedCycles.delete(id);
+  try {
+    await updateDB();
+    await saveUnlockSettings();
+    rebuildCycleLists();
+    renderMenu();
+    renderCycleStatusList();
+    toast('Cycle ' + id + ' supprime definitivement', 'warning', 4000);
+  } catch(e) { toast('Erreur suppression', 'error'); }
+}
+
+async function renameCycle(id) {
+  if (!window.userId) return;
+  const input = document.getElementById('rename-input-' + id);
+  if (!input) return;
+  const newName = input.value.trim();
+  if (!newName) { toast('Nom vide', 'warning'); return; }
+  const cIdx = window.dbProgram.findIndex(c => c.id === id);
+  if (cIdx === -1) return;
+  window.dbProgram[cIdx].focus = newName;
+  try {
+    await updateDB();
+    rebuildCycleLists();
+    renderMenu();
+    renderCycleStatusList();
+    toast('Cycle ' + id + ' renomme !', 'success');
+  } catch(e) { toast('Erreur renommage', 'error'); }
+}
+
 async function copyToSelectedCycles() {
   if (!window.userId) return;
   const sessType = document.getElementById('edit-session').value;
@@ -933,7 +1021,15 @@ async function copyToSelectedCycles() {
   const src = { name: document.getElementById('edit-ex-name').value, desc: document.getElementById('edit-ex-desc').value, video: document.getElementById('edit-ex-video').value, tst: document.getElementById('edit-ex-tst').value.trim()||'20s', reps: document.getElementById('edit-ex-reps').value.trim()||'10-12' };
   const sel = Array.from(document.querySelectorAll('#cycles-copy-list input:checked')).map(i => parseInt(i.value));
   if (!sel.length) { toast('Sélectionnez au moins un cycle cible', 'warning'); return; }
-  sel.forEach(tId => { const cIdx = window.dbProgram.findIndex(c => c.id === tId); if (cIdx !== -1) window.dbProgram[cIdx].sessions[sessType][exIdx] = Object.assign({}, src); });
+  sel.forEach(tId => {
+    const cIdx = window.dbProgram.findIndex(c => c.id === tId);
+    if (cIdx === -1) return;
+    const tSess = window.dbProgram[cIdx].sessions[sessType];
+    const tExArr = Array.isArray(tSess) ? tSess : (tSess.exercises || []);
+    tExArr[exIdx] = Object.assign({}, src);
+    if (!Array.isArray(tSess)) window.dbProgram[cIdx].sessions[sessType].exercises = tExArr;
+    else window.dbProgram[cIdx].sessions[sessType] = tExArr;
+  });
   try { await updateDB(); toast('Copié vers ' + sel.length + ' cycle(s)', 'success'); }
   catch(e) { toast('Erreur lors de la copie', 'error'); }
 }
@@ -1042,6 +1138,7 @@ Object.assign(window, {
   toggleCycleArchive, addNewCycle,
   saveCurrentExercise, saveCycleParams, copyToSelectedCycles, syncEditorState, renderEditorRecap,
   addExerciseToSession, deleteExerciseFromSession, liveUpdateRecap,
+  duplicateExercise, duplicateCycle, deleteCyclePermanently, renameCycle,
   switchCoachTab, toggleArchiveView
 });
 </script>
