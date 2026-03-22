@@ -47,8 +47,19 @@ initAuth();
 async function initializeAppState() {
   try {
     const progDoc = await window.firestoreUtils.getDoc(window.firestoreUtils.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'program_v2', 'settings'));
-    if (progDoc.exists()) { window.dbProgram = progDoc.data().cycles; }
-    else {
+    if (progDoc.exists()) {
+      const loaded = progDoc.data().cycles;
+      // Validate format: must be array with sessions as objects (not arrays)
+      const isValid = Array.isArray(loaded) && loaded.length > 0 &&
+        loaded[0].sessions && !Array.isArray(loaded[0].sessions.A) &&
+        loaded[0].sessions.A && loaded[0].sessions.A.exercises;
+      if (isValid) {
+        window.dbProgram = loaded;
+      } else {
+        // Old/invalid format — overwrite with default data
+        await window.firestoreUtils.setDoc(window.firestoreUtils.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'program_v2', 'settings'), { cycles: window.dbProgram });
+      }
+    } else {
       await window.firestoreUtils.setDoc(window.firestoreUtils.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'program_v2', 'settings'), { cycles: window.dbProgram });
     }
     const unlockDoc = await window.firestoreUtils.getDoc(window.firestoreUtils.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'unlock_settings', 'config'));
