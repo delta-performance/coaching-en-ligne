@@ -38,7 +38,11 @@ const initAuth = async () => {
 };
 
 onAuthStateChanged(auth, (user) => {
-  if (user) { window.userId = user.uid; initializeAppState(); }
+  if (user) {
+    window.userId = user.uid;
+    // Small delay to ensure non-module scripts have executed and exposed functions
+    setTimeout(() => initializeAppState(), 100);
+  }
   else { window.userId = null; if (unsubscribeLogs) unsubscribeLogs(); }
 });
 
@@ -77,15 +81,16 @@ async function initializeAppState() {
       await saveUnlockSettings();
     }
     window.isDataLoaded = true;
-    rebuildCycleLists();
+    if (typeof rebuildCycleLists === 'function') rebuildCycleLists();
+    else setTimeout(() => { if (typeof rebuildCycleLists === 'function') rebuildCycleLists(); }, 200);
     if (unsubscribeLogs) unsubscribeLogs();
     unsubscribeLogs = window.firestoreUtils.onSnapshot(
       window.firestoreUtils.collection(window.db, 'artifacts', window.appId, 'public', 'data', 'user_emmanuel_logs'),
       (snap) => {
         window.localProgress = {};
         snap.forEach(d => window.localProgress[d.id] = d.data());
-        renderMenu();
-        if (!document.getElementById('view-coach').classList.contains('hidden')) renderCoachLogs();
+        if (typeof renderMenu === 'function') renderMenu();
+        if (!document.getElementById('view-coach').classList.contains('hidden') && typeof renderCoachLogs === 'function') renderCoachLogs();
       },
       (err) => console.error("Snapshot error:", err)
     );
@@ -763,10 +768,10 @@ async function addNewCycle() {
   window.dbProgram.push({
     id: newId, tst, reps, rest, tours, focus: name,
     sessions: {
-      A: {rest, tours, exercises:[{name:"Exercice A1",desc:"À définir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice A2",desc:"À définir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice A3",desc:"À définir...",video:"",tst:"20s",reps:"10-12"}]},
-      B: {rest, tours, exercises:[{name:"Exercice B1",desc:"À définir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice B2",desc:"À définir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice B3",desc:"À définir...",video:"",tst:"20s",reps:"10-12"}]},
-      C: {rest, tours, exercises:[{name:"Exercice C1",desc:"À définir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice C2",desc:"À définir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice C3",desc:"À définir...",video:"",tst:"20s",reps:"10-12"}]},
-      D: {rest, tours, exercises:[{name:"Exercice D1",desc:"À définir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice D2",desc:"À définir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice D3",desc:"À définir...",video:"",tst:"20s",reps:"10-12"}]}
+      A: {rest, tours, exercises:[{name:"Exercice A1",desc:"A definir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice A2",desc:"A definir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice A3",desc:"A definir...",video:"",tst:"20s",reps:"10-12"}]},
+      B: {rest, tours, exercises:[{name:"Exercice B1",desc:"A definir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice B2",desc:"A definir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice B3",desc:"A definir...",video:"",tst:"20s",reps:"10-12"}]},
+      C: {rest, tours, exercises:[{name:"Exercice C1",desc:"A definir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice C2",desc:"A definir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice C3",desc:"A definir...",video:"",tst:"20s",reps:"10-12"}]},
+      D: {rest, tours, exercises:[{name:"Exercice D1",desc:"A definir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice D2",desc:"A definir...",video:"",tst:"20s",reps:"10-12"},{name:"Exercice D3",desc:"A definir...",video:"",tst:"20s",reps:"10-12"}]}
     }
   });
   try {
@@ -801,14 +806,14 @@ async function addExerciseToSession() {
   if (cIdx === -1) return;
   const sess  = window.dbProgram[cIdx].sessions[sessType];
   const exArr = Array.isArray(sess) ? sess : (sess.exercises || []);
-  exArr.push({ name: 'Nouvel exercice', desc: 'À définir...', video: '', tst: '20s', reps: '10-12' });
+  exArr.push({ name: 'Nouvel exercice', desc: 'A definir...', video: '', tst: '20s', reps: '10-12' });
   if (!Array.isArray(sess)) window.dbProgram[cIdx].sessions[sessType].exercises = exArr;
   try {
     await updateDB();
     rebuildExerciseSelect(exArr.length, exArr.length - 1);
     syncEditorState();
-    toast('Exercice ajouté — modifie-le et sauvegarde !', 'success');
-  } catch(e) { toast('Erreur lors de l'ajout', 'error'); }
+    toast('Exercice ajoute - modifie-le et sauvegarde !', 'success');
+  } catch(e) { toast('Erreur ajout', 'error'); }
 }
 
 async function deleteExerciseFromSession() {
