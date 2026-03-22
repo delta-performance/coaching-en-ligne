@@ -314,6 +314,10 @@ body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0f172a; 
               <option value="0">Ex 1</option><option value="1">Ex 2</option><option value="2">Ex 3</option>
             </select>
           </div>
+          <div class="flex gap-3">
+            <button onclick="addExerciseToSession()" class="flex-1 py-3 bg-amber-500/20 border border-amber-500/40 text-amber-400 rounded-xl font-black text-xs uppercase italic hover:bg-amber-500/30 transition-all">+ Ajouter un exercice</button>
+            <button onclick="deleteExerciseFromSession()" class="flex-1 py-3 bg-red-950/30 border border-red-900/40 text-red-400 rounded-xl font-black text-xs uppercase italic hover:bg-red-950/50 transition-all">🗑 Supprimer cet exercice</button>
+          </div>
           <div class="space-y-4">
             <div class="bg-slate-900/50 p-5 rounded-[1.5rem] border border-slate-800 space-y-3">
               <p class="text-[9px] font-black uppercase tracking-widest text-amber-500/70">Paramètres de la séance (circuit)</p>
@@ -772,6 +776,51 @@ function rebuildCycleLists() {
   ).join('');
 }
 
+function rebuildExerciseSelect(exCount, selectedIdx) {
+  const sel = document.getElementById('edit-exercise-idx');
+  if (!sel) return;
+  sel.innerHTML = Array.from({length: exCount}, (_, i) => '<option value="' + i + '"' + (i === selectedIdx ? ' selected' : '') + '>Ex ' + (i+1) + '</option>').join('');
+}
+
+async function addExerciseToSession() {
+  if (!window.userId) return;
+  const cId      = parseInt(document.getElementById('edit-cycle').value);
+  const sessType = document.getElementById('edit-session').value;
+  const cIdx     = window.dbProgram.findIndex(c => c.id === cId);
+  if (cIdx === -1) return;
+  const sess  = window.dbProgram[cIdx].sessions[sessType];
+  const exArr = Array.isArray(sess) ? sess : (sess.exercises || []);
+  exArr.push({ name: 'Nouvel exercice', desc: 'À définir...', video: '', tst: '20s', reps: '10-12' });
+  if (!Array.isArray(sess)) window.dbProgram[cIdx].sessions[sessType].exercises = exArr;
+  try {
+    await updateDB();
+    rebuildExerciseSelect(exArr.length, exArr.length - 1);
+    syncEditorState();
+    toast('Exercice ajouté — modifie-le et sauvegarde !', 'success');
+  } catch(e) { toast('Erreur lors de l'ajout', 'error'); }
+}
+
+async function deleteExerciseFromSession() {
+  if (!window.userId) return;
+  const cId      = parseInt(document.getElementById('edit-cycle').value);
+  const sessType = document.getElementById('edit-session').value;
+  const exIdx    = parseInt(document.getElementById('edit-exercise-idx').value);
+  const cIdx     = window.dbProgram.findIndex(c => c.id === cId);
+  if (cIdx === -1) return;
+  const sess  = window.dbProgram[cIdx].sessions[sessType];
+  const exArr = Array.isArray(sess) ? sess : (sess.exercises || []);
+  if (exArr.length <= 1) { toast('Il faut au moins 1 exercice par séance', 'warning'); return; }
+  exArr.splice(exIdx, 1);
+  if (!Array.isArray(sess)) window.dbProgram[cIdx].sessions[sessType].exercises = exArr;
+  try {
+    await updateDB();
+    const newIdx = Math.min(exIdx, exArr.length - 1);
+    rebuildExerciseSelect(exArr.length, newIdx);
+    syncEditorState();
+    toast('Exercice supprimé', 'info');
+  } catch(e) { toast('Erreur lors de la suppression', 'error'); }
+}
+
 function syncEditorState() {
   if (!window.isDataLoaded) return;
   const cId      = parseInt(document.getElementById('edit-cycle').value);
@@ -783,7 +832,9 @@ function syncEditorState() {
     document.getElementById('edit-cycle-rest').value  = sp.rest  || '';
     document.getElementById('edit-cycle-tours').value = sp.tours || '3';
     const exList = getSessionExercises(cycle, sessType);
-    const ex = exList[exIdx];
+    rebuildExerciseSelect(exList.length, Math.min(exIdx, exList.length - 1));
+    const safeIdx = Math.min(exIdx, exList.length - 1);
+    const ex = exList[safeIdx];
     document.getElementById('edit-ex-name').value  = ex ? ex.name  : '';
     document.getElementById('edit-ex-desc').value  = ex ? ex.desc  : '';
     document.getElementById('edit-ex-video').value = ex ? ex.video : '';
@@ -946,6 +997,7 @@ Object.assign(window, {
   toggleCycleUnlock, saveUnlockedCycles,
   toggleCycleArchive, addNewCycle,
   saveCurrentExercise, saveCycleParams, copyToSelectedCycles, syncEditorState, renderEditorRecap,
+  addExerciseToSession, deleteExerciseFromSession,
   switchCoachTab, toggleArchiveView
 });
 </script>
