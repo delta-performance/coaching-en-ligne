@@ -340,28 +340,28 @@ body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0f172a; 
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label class="block text-[8px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Repos entre tours</label>
-                  <input type="text" id="edit-cycle-rest" placeholder="ex: 45s" class="w-full p-3 rounded-xl input-dark text-sm font-bold outline-none focus:border-amber-500">
+                  <input type="text" id="edit-cycle-rest" oninput="liveUpdateRecap()" placeholder="ex: 45s" class="w-full p-3 rounded-xl input-dark text-sm font-bold outline-none focus:border-amber-500">
                 </div>
                 <div>
                   <label class="block text-[8px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Nb de tours</label>
-                  <input type="number" id="edit-cycle-tours" placeholder="ex: 3" min="1" max="20" class="w-full p-3 rounded-xl input-dark text-sm font-bold outline-none focus:border-amber-500">
+                  <input type="number" id="edit-cycle-tours" oninput="liveUpdateRecap()" placeholder="ex: 3" min="1" max="20" class="w-full p-3 rounded-xl input-dark text-sm font-bold outline-none focus:border-amber-500">
                 </div>
               </div>
               <button onclick="saveCycleParams()" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-black text-xs uppercase italic transition-all">SAUVEGARDER SÉANCE</button>
             </div>
             <div class="space-y-3 bg-slate-800/30 p-5 rounded-[1.5rem] border border-slate-800">
               <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Exercice sélectionné</p>
-              <input type="text" id="edit-ex-name" placeholder="Nom de l'exercice" class="w-full p-3 rounded-xl input-dark text-sm font-bold outline-none focus:border-amber-500">
-              <textarea id="edit-ex-desc" placeholder="Consignes techniques..." class="w-full p-3 rounded-xl input-dark text-sm h-24 outline-none focus:border-amber-500 font-medium"></textarea>
+              <input type="text" id="edit-ex-name" oninput="liveUpdateRecap()" placeholder="Nom de l'exercice" class="w-full p-3 rounded-xl input-dark text-sm font-bold outline-none focus:border-amber-500">
+              <textarea id="edit-ex-desc" oninput="liveUpdateRecap()" placeholder="Consignes techniques..." class="w-full p-3 rounded-xl input-dark text-sm h-24 outline-none focus:border-amber-500 font-medium"></textarea>
               <input type="text" id="edit-ex-video" placeholder="URL Vidéo" class="w-full p-3 rounded-xl input-dark text-sm font-bold outline-none focus:border-amber-500">
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label class="block text-[8px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Tempo</label>
-                  <input type="text" id="edit-ex-tst" placeholder="ex: 20s" class="w-full p-3 rounded-xl input-dark text-sm font-bold outline-none focus:border-amber-500">
+                  <input type="text" id="edit-ex-tst" oninput="liveUpdateRecap()" placeholder="ex: 20s" class="w-full p-3 rounded-xl input-dark text-sm font-bold outline-none focus:border-amber-500">
                 </div>
                 <div>
                   <label class="block text-[8px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Volume/Reps</label>
-                  <input type="text" id="edit-ex-reps" placeholder="ex: 10-12" class="w-full p-3 rounded-xl input-dark text-sm font-bold outline-none focus:border-amber-500">
+                  <input type="text" id="edit-ex-reps" oninput="liveUpdateRecap()" placeholder="ex: 10-12" class="w-full p-3 rounded-xl input-dark text-sm font-bold outline-none focus:border-amber-500">
                 </div>
               </div>
               <button onclick="saveCurrentExercise()" class="w-full py-3 bg-amber-500 text-slate-900 rounded-xl font-black hover:bg-amber-400 transition-all uppercase italic text-xs">METTRE À JOUR EXERCICE</button>
@@ -837,6 +837,34 @@ async function deleteExerciseFromSession() {
   } catch(e) { toast('Erreur lors de la suppression', 'error'); }
 }
 
+function liveUpdateRecap() {
+  if (!window.isDataLoaded) return;
+  const cId      = parseInt(document.getElementById('edit-cycle').value);
+  const sessType = document.getElementById('edit-session').value;
+  const exIdx    = parseInt(document.getElementById('edit-exercise-idx').value);
+  const cycle    = window.dbProgram.find(c => c.id === cId);
+  if (!cycle) return;
+
+  // Build a temporary preview of the current session with unsaved changes
+  const exList = JSON.parse(JSON.stringify(getSessionExercises(cycle, sessType)));
+  const rest   = document.getElementById('edit-cycle-rest').value  || getSessionParams(cycle, sessType).rest;
+  const tours  = document.getElementById('edit-cycle-tours').value || getSessionParams(cycle, sessType).tours;
+
+  if (exList[exIdx]) {
+    exList[exIdx].name = document.getElementById('edit-ex-name').value  || exList[exIdx].name;
+    exList[exIdx].tst  = document.getElementById('edit-ex-tst').value   || exList[exIdx].tst;
+    exList[exIdx].reps = document.getElementById('edit-ex-reps').value  || exList[exIdx].reps;
+  }
+
+  // Render recap with live values
+  const tempCycle = Object.assign({}, cycle, {
+    sessions: Object.assign({}, cycle.sessions, {
+      [sessType]: { rest, tours, exercises: exList }
+    })
+  });
+  renderEditorRecap(tempCycle, sessType);
+}
+
 function syncEditorState() {
   if (!window.isDataLoaded) return;
   const cId      = parseInt(document.getElementById('edit-cycle').value);
@@ -1013,7 +1041,7 @@ Object.assign(window, {
   toggleCycleUnlock, saveUnlockedCycles,
   toggleCycleArchive, addNewCycle,
   saveCurrentExercise, saveCycleParams, copyToSelectedCycles, syncEditorState, renderEditorRecap,
-  addExerciseToSession, deleteExerciseFromSession,
+  addExerciseToSession, deleteExerciseFromSession, liveUpdateRecap,
   switchCoachTab, toggleArchiveView
 });
 </script>
