@@ -377,6 +377,12 @@ body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0f172a; 
           </div>
           <div class="bg-slate-800/20 p-5 rounded-[1.5rem] border border-slate-800 space-y-3">
             <p class="text-[9px] font-black uppercase tracking-widest text-slate-500">Multi-syncc — copier vers</p>
+            <div class="flex gap-2">
+              <button id="copy-mode-ex" onclick="setCopyMode('exercise')" class="flex-1 py-2 rounded-xl font-black text-[9px] uppercase italic border transition-all bg-amber-500/20 border-amber-500/50 text-amber-400">Exercice</button>
+              <button id="copy-mode-sess" onclick="setCopyMode('session')" class="flex-1 py-2 rounded-xl font-black text-[9px] uppercase italic border transition-all bg-slate-900 border-slate-700 text-slate-500">Séance</button>
+              <button id="copy-mode-cycle" onclick="setCopyMode('cycle')" class="flex-1 py-2 rounded-xl font-black text-[9px] uppercase italic border transition-all bg-slate-900 border-slate-700 text-slate-500">Cycle</button>
+            </div>
+            <p id="copy-mode-desc" class="text-[8px] text-slate-600 italic">Copie l'exercice sélectionné vers les cycles cochés (même séance, même position)</p>
             <div class="grid grid-cols-4 gap-2" id="cycles-copy-list"></div>
             <button onclick="copyToSelectedCycles()" class="w-full py-3 border-2 border-slate-700 text-white rounded-xl font-black hover:bg-slate-700 transition-all uppercase italic text-xs">COPIER VERS SÉLECTION</button>
           </div>
@@ -933,6 +939,27 @@ async function saveCurrentExercise() {
   }
 }
 
+let currentCopyMode = 'exercise';
+
+function setCopyMode(mode) {
+  currentCopyMode = mode;
+  const modes = { exercise: 'copy-mode-ex', session: 'copy-mode-sess', cycle: 'copy-mode-cycle' };
+  const descs = {
+    exercise: "Copie l'exercice selectionne vers les cycles coches (meme seance, meme position)",
+    session:  "Copie toute la seance selectionnee (tous les exercices + parametres) vers les cycles coches",
+    cycle:    "Copie les 4 seances completes du cycle selectionne vers les cycles coches"
+  };
+  Object.keys(modes).forEach(m => {
+    const btn = document.getElementById(modes[m]);
+    if (m === mode) {
+      btn.className = 'flex-1 py-2 rounded-xl font-black text-[9px] uppercase italic border transition-all bg-amber-500/20 border-amber-500/50 text-amber-400';
+    } else {
+      btn.className = 'flex-1 py-2 rounded-xl font-black text-[9px] uppercase italic border transition-all bg-slate-900 border-slate-700 text-slate-500';
+    }
+  });
+  document.getElementById('copy-mode-desc').innerText = descs[mode];
+}
+
 async function duplicateExercise() {
   if (!window.userId) return;
   const cId      = parseInt(document.getElementById('edit-cycle').value);
@@ -1016,21 +1043,50 @@ async function renameCycle(id) {
 
 async function copyToSelectedCycles() {
   if (!window.userId) return;
-  const sessType = document.getElementById('edit-session').value;
-  const exIdx    = parseInt(document.getElementById('edit-exercise-idx').value);
-  const src = { name: document.getElementById('edit-ex-name').value, desc: document.getElementById('edit-ex-desc').value, video: document.getElementById('edit-ex-video').value, tst: document.getElementById('edit-ex-tst').value.trim()||'20s', reps: document.getElementById('edit-ex-reps').value.trim()||'10-12' };
+  const srcCycleId = parseInt(document.getElementById('edit-cycle').value);
+  const sessType   = document.getElementById('edit-session').value;
+  const exIdx      = parseInt(document.getElementById('edit-exercise-idx').value);
+  const srcCycleIdx = window.dbProgram.findIndex(c => c.id === srcCycleId);
   const sel = Array.from(document.querySelectorAll('#cycles-copy-list input:checked')).map(i => parseInt(i.value));
-  if (!sel.length) { toast('Sélectionnez au moins un cycle cible', 'warning'); return; }
-  sel.forEach(tId => {
-    const cIdx = window.dbProgram.findIndex(c => c.id === tId);
-    if (cIdx === -1) return;
-    const tSess = window.dbProgram[cIdx].sessions[sessType];
-    const tExArr = Array.isArray(tSess) ? tSess : (tSess.exercises || []);
-    tExArr[exIdx] = Object.assign({}, src);
-    if (!Array.isArray(tSess)) window.dbProgram[cIdx].sessions[sessType].exercises = tExArr;
-    else window.dbProgram[cIdx].sessions[sessType] = tExArr;
-  });
-  try { await updateDB(); toast('Copié vers ' + sel.length + ' cycle(s)', 'success'); }
+  if (!sel.length) { toast('Selectionnez au moins un cycle cible', 'warning'); return; }
+
+  if (currentCopyMode === 'exercise') {
+    // Copy single exercise
+    const src = { name: document.getElementById('edit-ex-name').value, desc: document.getElementById('edit-ex-desc').value, video: document.getElementById('edit-ex-video').value, tst: document.getElementById('edit-ex-tst').value.trim()||'20s', reps: document.getElementById('edit-ex-reps').value.trim()||'10-12' };
+    sel.forEach(tId => {
+      const cIdx = window.dbProgram.findIndex(c => c.id === tId);
+      if (cIdx === -1) return;
+      const tSess  = window.dbProgram[cIdx].sessions[sessType];
+      const tExArr = Array.isArray(tSess) ? tSess : (tSess.exercises || []);
+      tExArr[exIdx] = Object.assign({}, src);
+      if (!Array.isArray(tSess)) window.dbProgram[cIdx].sessions[sessType].exercises = tExArr;
+      else window.dbProgram[cIdx].sessions[sessType] = tExArr;
+    });
+
+  } else if (currentCopyMode === 'session') {
+    // Copy entire session (all exercises + params)
+    if (srcCycleIdx === -1) return;
+    const srcSess = window.dbProgram[srcCycleIdx].sessions[sessType];
+    const srcCopy = JSON.parse(JSON.stringify(srcSess));
+    sel.forEach(tId => {
+      const cIdx = window.dbProgram.findIndex(c => c.id === tId);
+      if (cIdx === -1) return;
+      window.dbProgram[cIdx].sessions[sessType] = JSON.parse(JSON.stringify(srcCopy));
+    });
+
+  } else if (currentCopyMode === 'cycle') {
+    // Copy all 4 sessions of the cycle
+    if (srcCycleIdx === -1) return;
+    const srcSessions = window.dbProgram[srcCycleIdx].sessions;
+    sel.forEach(tId => {
+      const cIdx = window.dbProgram.findIndex(c => c.id === tId);
+      if (cIdx === -1) return;
+      window.dbProgram[cIdx].sessions = JSON.parse(JSON.stringify(srcSessions));
+    });
+  }
+
+  const modeLabel = currentCopyMode === 'exercise' ? 'exercice' : currentCopyMode === 'session' ? 'seance' : 'cycle';
+  try { await updateDB(); toast(modeLabel + ' copie vers ' + sel.length + ' cycle(s) !', 'success'); }
   catch(e) { toast('Erreur lors de la copie', 'error'); }
 }
 
@@ -1138,7 +1194,7 @@ Object.assign(window, {
   toggleCycleArchive, addNewCycle,
   saveCurrentExercise, saveCycleParams, copyToSelectedCycles, syncEditorState, renderEditorRecap,
   addExerciseToSession, deleteExerciseFromSession, liveUpdateRecap,
-  duplicateExercise, duplicateCycle, deleteCyclePermanently, renameCycle,
+  duplicateExercise, duplicateCycle, deleteCyclePermanently, renameCycle, setCopyMode,
   switchCoachTab, toggleArchiveView
 });
 </script>
